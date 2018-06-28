@@ -1,0 +1,4 @@
+<resources>
+    <dimen name="button_width">75dp</dimen>
+    <dimen name="button_margin">5dp</dimen>
+</resources>
