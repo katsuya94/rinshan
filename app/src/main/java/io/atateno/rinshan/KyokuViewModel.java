@@ -8,6 +8,7 @@ import android.util.Log;
 import org.statefulj.fsm.FSM;
 import org.statefulj.fsm.Persister;
 import org.statefulj.fsm.RetryException;
+import org.statefulj.fsm.TooBusyException;
 import org.statefulj.fsm.model.Action;
 import org.statefulj.fsm.model.State;
 import org.statefulj.fsm.model.impl.StateImpl;
@@ -79,5 +80,11 @@ class KyokuViewModel extends ViewModel {
 
     public void init() {
         initStateMachine();
+    }
+
+    public void onEvent(String event) {
+        try {
+            fsm.onEvent(this, event);
+        } catch (TooBusyException e) {}
     }
 }

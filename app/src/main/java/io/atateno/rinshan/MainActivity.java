@@ -6,6 +6,7 @@ import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.view.View;
 import android.arch.lifecycle.ViewModelProviders;
+import android.widget.Button;
 import android.widget.TextView;
 
 public class MainActivity extends AppCompatActivity {
@@ -32,13 +33,6 @@ public class MainActivity extends AppCompatActivity {
     public void startKyoku(View view) {
     }
 
-    class StateObserver implements Observer<String> {
-        public void onChanged(String state) {
-            TextView tv = (TextView) findViewById(R.id.textView);
-            tv.setText(state);
-        }
-    }
-
     @Override
     public void onResume() {
         super.onResume();
@@ -49,8 +43,17 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+
         kyokuViewModel = ViewModelProviders.of(this).get(KyokuViewModel.class);
         kyokuViewModel.init();
-        kyokuViewModel.getState().observe(this, new StateObserver());
+        kyokuViewModel.getState().observe(this, state -> {
+            final TextView tv = (TextView) findViewById(R.id.textView);
+            tv.setText(state);
+        });
+
+        final Button button = findViewById(R.id.button);
+        button.setOnClickListener(view -> {
+            kyokuViewModel.onEvent(KyokuViewModel.start);
+        });
     }
 }
