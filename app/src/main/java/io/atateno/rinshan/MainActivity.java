@@ -1,11 +1,16 @@
 package io.atateno.rinshan;
 
+import android.arch.lifecycle.Observer;
 import android.content.pm.ActivityInfo;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.view.View;
+import android.arch.lifecycle.ViewModelProviders;
+import android.widget.TextView;
 
 public class MainActivity extends AppCompatActivity {
+    private KyokuViewModel kyokuViewModel;
+
     private void setImmersiveLandscapeUI() {
         // Enables regular immersive mode.
         // For "lean back" mode, remove SYSTEM_UI_FLAG_IMMERSIVE.
@@ -24,6 +29,16 @@ public class MainActivity extends AppCompatActivity {
         setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
     }
 
+    public void startKyoku(View view) {
+    }
+
+    class StateObserver implements Observer<String> {
+        public void onChanged(String state) {
+            TextView tv = (TextView) findViewById(R.id.textView);
+            tv.setText(state);
+        }
+    }
+
     @Override
     public void onResume() {
         super.onResume();
@@ -34,6 +49,8 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        setImmersiveLandscapeUI();
+        kyokuViewModel = ViewModelProviders.of(this).get(KyokuViewModel.class);
+        kyokuViewModel.init();
+        kyokuViewModel.getState().observe(this, new StateObserver());
     }
 }
