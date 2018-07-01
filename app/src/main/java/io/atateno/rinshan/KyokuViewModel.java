@@ -3,9 +3,8 @@ package io.atateno.rinshan;
 import android.arch.lifecycle.LiveData;
 import android.arch.lifecycle.MutableLiveData;
 import android.arch.lifecycle.ViewModel;
+import android.util.Pair;
 
-import java.time.Duration;
-import java.time.Instant;
 import java.util.Timer;
 import java.util.TimerTask;
 
@@ -25,22 +24,21 @@ class KyokuViewModel extends ViewModel {
         WAITING_FOR_NORTH,
     }
 
-    private Duration extraTime;
-    private Duration baseTime;
-    private Duration time;
+    private long extraTime;
+    private long baseTime;
 
-    private Duration eastTime;
-    private Duration southTime;
-    private Duration westTime;
-    private Duration northTime;
+    private long eastTime;
+    private long southTime;
+    private long westTime;
+    private long northTime;
 
-    private Instant scheduledAt;
     private Timer timer;
+    private long time;
 
     private MutableLiveData<States> state;
-    private MutableLiveData<Duration> displayTime;
+    private MutableLiveData<Pair<States, Integer>> display;
 
-    private Duration getCurrentSeatTime() {
+    private long getCurrentSeatTime() {
        switch (state.getValue()) {
            case WAITING_FOR_EAST:
                return eastTime;
@@ -51,67 +49,74 @@ class KyokuViewModel extends ViewModel {
            case WAITING_FOR_NORTH:
                return northTime;
        }
-       return null;
+       return 0;
     }
 
-    private void setDisplayTime() {
-        if (time.compareTo(extraTime) < 0) {
-            displayTime.setValue(time);
+    private void setTime(long time) {
+        this.time = time;
+        if (this.time < extraTime) {
+            if (this.time >= 0) {
+                display.postValue(new Pair<>(state.getValue(), new Integer((int) (this.time + 999) / 1000)));
+            } else {
+                display.postValue(new Pair<>(state.getValue(), new Integer((int) this.time / 1000)));
+            }
         } else {
-            displayTime.setValue(null);
+            display.postValue(new Pair<>(state.getValue(), null));
         }
     }
 
-    private void scheduleTick(Duration duration) {
-        scheduledAt = Instant.now();
-        timer.cancel();
+    private void scheduleTick(long in) {
+        long scheduledAt = System.currentTimeMillis();
+        if (timer != null) {
+            timer.cancel();
+        }
+        timer = new Timer();
         timer.schedule(new TimerTask() {
             @Override
             public void run() {
-                elapsed
-                time = time.minus(duration);
+                long elapsed = System.currentTimeMillis() - scheduledAt;
+                setTime(time - elapsed);
+                scheduleTick(((time % 1000) + 1000) % 1000);
             }
-        }, duration.toMillis());
+        }, in);
     }
 
     private void resetTime() {
-        timer.cancel();
-        time = getCurrentSeatTime() + baseTime;
-        setDisplayTime();
-        if (time.compareTo(extraTime) < 0) {
-            timer.schedule(() -> {
-
-            }, time.withSeconds(0).toMillis());
+        setTime(getCurrentSeatTime() + baseTime);
+        if (time < extraTime) {
+            scheduleTick(time % 1000);
+        } else {
+            scheduleTick(time - extraTime);
         }
     }
 
     public void init() {
-        extraTime = Duration.ofSeconds(30);
-        baseTime = Duration.ofSeconds(10);
+        extraTime = 30 * 1000;
+        baseTime = 10 * 1000;
 
         eastTime = extraTime;
         southTime = extraTime;
         westTime = extraTime;
         northTime = extraTime;
 
-        timer = new Timer();
-
-        state = new MutableLiveData<States>();
+        state = new MutableLiveData<>();
         state.setValue(States.WAITING_FOR_START);
 
-        displayTime = new MutableLiveData<Duration>();
+        display = new MutableLiveData<>();
+        display.setValue(new Pair<>(state.getValue(), null));
     }
 
     public LiveData<States> getState() {
         return state;
     }
 
-    public LiveData<Duration> getDisplayTime() {
-        return displayTime;
+    public LiveData<Pair<States, Integer>> getDisplay() {
+        return display;
     }
 
     public void start() {
         state.setValue(States.WAITING_FOR_EAST);
+        resetTime();
     }
 
     public void eastDiscard() {

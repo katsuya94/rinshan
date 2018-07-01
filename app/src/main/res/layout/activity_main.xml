@@ -61,12 +61,12 @@
                         app:layout_constraintTop_toTopOf="parent" />
 
                     <TextView
-                        android:id="@+id/displayTime"
+                        android:id="@+id/textViewDisplayTime"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="40"
                         android:textAppearance="@style/TextAppearance.AppCompat.Headline"
-                        android:textSize="72sp"
+                        android:textSize="120sp"
                         app:layout_constraintBottom_toBottomOf="parent"
                         app:layout_constraintEnd_toEndOf="parent"
                         app:layout_constraintHorizontal_bias="0.5"
@@ -130,16 +130,6 @@
                 android:rotation="90"
                 app:layout_constraintDimensionRatio="1:1"
                 app:layout_constraintLeft_toLeftOf="parent">
-
-                <Button
-                    android:id="@+id/buttonRelSouth"
-                    style="@style/Widget.AppCompat.Button"
-                    android:layout_width="match_parent"
-                    android:layout_height="@dimen/button_width"
-                    android:background="@color/colorPrimaryDark"
-                    android:text="南"
-                    android:textAppearance="@style/TextAppearance.AppCompat.Large"
-                    app:layout_constraintBottom_toBottomOf="parent" />
 
                 <Button
                     android:id="@+id/buttonRelNorth"
