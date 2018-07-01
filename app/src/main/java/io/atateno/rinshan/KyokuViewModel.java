@@ -3,88 +3,134 @@ package io.atateno.rinshan;
 import android.arch.lifecycle.LiveData;
 import android.arch.lifecycle.MutableLiveData;
 import android.arch.lifecycle.ViewModel;
-import android.util.Log;
 
-import org.statefulj.fsm.FSM;
-import org.statefulj.fsm.Persister;
-import org.statefulj.fsm.RetryException;
-import org.statefulj.fsm.TooBusyException;
-import org.statefulj.fsm.model.Action;
-import org.statefulj.fsm.model.State;
-import org.statefulj.fsm.model.impl.StateImpl;
-import org.statefulj.persistence.memory.MemoryPersisterImpl;
-
-import java.util.LinkedList;
-import java.util.List;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.Timer;
+import java.util.TimerTask;
 
 class KyokuViewModel extends ViewModel {
-    static final String start = "start";
-    static final String eastDiscard = "eastDiscard";
-    static final String southDiscard = "southDiscard";
-    static final String westDiscard = "westDiscard";
-    static final String northDiscard = "northDiscard";
-    static final State<KyokuViewModel> waitingForStart = new StateImpl<KyokuViewModel>("waitingForStart");
-    static final State<KyokuViewModel> waitingForEast = new StateImpl<KyokuViewModel>("waitingForEast");
-    static final State<KyokuViewModel> waitingForSouth = new StateImpl<KyokuViewModel>("waitingForSouth");
-    static final State<KyokuViewModel> waitingForWest = new StateImpl<KyokuViewModel>("waitingForWest");
-    static final State<KyokuViewModel> waitingForNorth = new StateImpl<KyokuViewModel>("waitingForNorth");
-
-    @org.statefulj.persistence.annotations.State
-    private String state;
-    private MutableLiveData<String> liveState;
-    private FSM<KyokuViewModel> fsm;
-
-    public LiveData<String> getState() {
-        if (liveState == null) {
-            liveState = new MutableLiveData<String>();
-        }
-        return liveState;
+    public enum Directions {
+        EAST,
+        SOUTH,
+        WEST,
+        NORTH,
     }
 
-    class UpdateLiveData<T> implements Action<T> {
-        public void execute(T stateful, String event, Object ... args) throws RetryException {
-            Log.d("", args.toString());
-            liveState.setValue("stuff");
+    public enum States {
+        WAITING_FOR_START,
+        WAITING_FOR_EAST,
+        WAITING_FOR_SOUTH,
+        WAITING_FOR_WEST,
+        WAITING_FOR_NORTH,
+    }
+
+    private Duration extraTime;
+    private Duration baseTime;
+    private Duration time;
+
+    private Duration eastTime;
+    private Duration southTime;
+    private Duration westTime;
+    private Duration northTime;
+
+    private Instant scheduledAt;
+    private Timer timer;
+
+    private MutableLiveData<States> state;
+    private MutableLiveData<Duration> displayTime;
+
+    private Duration getCurrentSeatTime() {
+       switch (state.getValue()) {
+           case WAITING_FOR_EAST:
+               return eastTime;
+           case WAITING_FOR_SOUTH:
+               return southTime;
+           case WAITING_FOR_WEST:
+               return westTime;
+           case WAITING_FOR_NORTH:
+               return northTime;
+       }
+       return null;
+    }
+
+    private void setDisplayTime() {
+        if (time.compareTo(extraTime) < 0) {
+            displayTime.setValue(time);
+        } else {
+            displayTime.setValue(null);
         }
     }
 
-    private void initStateMachine() {
-        waitingForStart.addTransition(start, waitingForEast, new UpdateLiveData<KyokuViewModel>());
-        waitingForEast.addTransition(eastDiscard, waitingForSouth, new UpdateLiveData<KyokuViewModel>());
-        waitingForEast.addTransition(southDiscard, waitingForWest, new UpdateLiveData<KyokuViewModel>());
-        waitingForEast.addTransition(westDiscard, waitingForNorth, new UpdateLiveData<KyokuViewModel>());
-        waitingForEast.addTransition(northDiscard, waitingForEast, new UpdateLiveData<KyokuViewModel>());
-        waitingForSouth.addTransition(eastDiscard, waitingForSouth, new UpdateLiveData<KyokuViewModel>());
-        waitingForSouth.addTransition(southDiscard, waitingForWest, new UpdateLiveData<KyokuViewModel>());
-        waitingForSouth.addTransition(westDiscard, waitingForNorth, new UpdateLiveData<KyokuViewModel>());
-        waitingForSouth.addTransition(northDiscard, waitingForEast, new UpdateLiveData<KyokuViewModel>());
-        waitingForWest.addTransition(eastDiscard, waitingForSouth, new UpdateLiveData<KyokuViewModel>());
-        waitingForWest.addTransition(southDiscard, waitingForWest, new UpdateLiveData<KyokuViewModel>());
-        waitingForWest.addTransition(westDiscard, waitingForNorth, new UpdateLiveData<KyokuViewModel>());
-        waitingForWest.addTransition(northDiscard, waitingForEast, new UpdateLiveData<KyokuViewModel>());
-        waitingForNorth.addTransition(eastDiscard, waitingForSouth, new UpdateLiveData<KyokuViewModel>());
-        waitingForNorth.addTransition(southDiscard, waitingForWest, new UpdateLiveData<KyokuViewModel>());
-        waitingForNorth.addTransition(westDiscard, waitingForNorth, new UpdateLiveData<KyokuViewModel>());
-        waitingForNorth.addTransition(northDiscard, waitingForEast, new UpdateLiveData<KyokuViewModel>());
+    private void scheduleTick(Duration duration) {
+        scheduledAt = Instant.now();
+        timer.cancel();
+        timer.schedule(new TimerTask() {
+            @Override
+            public void run() {
+                elapsed
+                time = time.minus(duration);
+            }
+        }, duration.toMillis());
+    }
 
-        List<State<KyokuViewModel>> states = new LinkedList<State<KyokuViewModel>>();
-        states.add(waitingForStart);
-        states.add(waitingForEast);
-        states.add(waitingForSouth);
-        states.add(waitingForWest);
-        states.add(waitingForNorth);
+    private void resetTime() {
+        timer.cancel();
+        time = getCurrentSeatTime() + baseTime;
+        setDisplayTime();
+        if (time.compareTo(extraTime) < 0) {
+            timer.schedule(() -> {
 
-        Persister<KyokuViewModel> persister = new MemoryPersisterImpl<KyokuViewModel>(states, waitingForStart);
-        fsm = new FSM<KyokuViewModel>("KyokuViewModel", persister);
+            }, time.withSeconds(0).toMillis());
+        }
     }
 
     public void init() {
-        initStateMachine();
+        extraTime = Duration.ofSeconds(30);
+        baseTime = Duration.ofSeconds(10);
+
+        eastTime = extraTime;
+        southTime = extraTime;
+        westTime = extraTime;
+        northTime = extraTime;
+
+        timer = new Timer();
+
+        state = new MutableLiveData<States>();
+        state.setValue(States.WAITING_FOR_START);
+
+        displayTime = new MutableLiveData<Duration>();
     }
 
-    public void onEvent(String event) {
-        try {
-            fsm.onEvent(this, event);
-        } catch (TooBusyException e) {}
+    public LiveData<States> getState() {
+        return state;
+    }
+
+    public LiveData<Duration> getDisplayTime() {
+        return displayTime;
+    }
+
+    public void start() {
+        state.setValue(States.WAITING_FOR_EAST);
+    }
+
+    public void eastDiscard() {
+        state.setValue(States.WAITING_FOR_SOUTH);
+        resetTime();
+    }
+
+    public void southDiscard() {
+        state.setValue(States.WAITING_FOR_WEST);
+        resetTime();
+    }
+
+    public void westDiscard() {
+        state.setValue(States.WAITING_FOR_NORTH);
+        resetTime();
+    }
+
+    public void northDiscard() {
+        state.setValue(States.WAITING_FOR_EAST);
+        resetTime();
     }
 }

@@ -1,6 +1,5 @@
 package io.atateno.rinshan;
 
-import android.arch.lifecycle.Observer;
 import android.content.pm.ActivityInfo;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
@@ -44,16 +43,71 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
+        Button buttonStart = findViewById(R.id.buttonStart);
+        Button buttonRelEast = findViewById((R.id.buttonRelEast));
+        Button buttonRelSouth = findViewById((R.id.buttonRelSouth));
+        Button buttonRelWest = findViewById((R.id.buttonRelWest));
+        Button buttonRelNorth = findViewById((R.id.buttonRelNorth));
+
         kyokuViewModel = ViewModelProviders.of(this).get(KyokuViewModel.class);
         kyokuViewModel.init();
+
         kyokuViewModel.getState().observe(this, state -> {
-            final TextView tv = (TextView) findViewById(R.id.textView);
-            tv.setText(state);
+            ((TextView) findViewById(R.id.textView)).setText(state.name());
+
+            if (state == KyokuViewModel.States.WAITING_FOR_START) {
+                buttonStart.setVisibility(View.VISIBLE);
+            } else {
+                buttonStart.setVisibility(View.GONE);
+            }
+            
+            if (state == KyokuViewModel.States.WAITING_FOR_EAST) {
+                buttonRelEast.setBackgroundResource(R.color.colorAccent);
+            } else {
+                buttonRelEast.setBackgroundResource(R.color.colorPrimaryDark);
+            }
+
+            if (state == KyokuViewModel.States.WAITING_FOR_SOUTH) {
+                buttonRelSouth.setBackgroundResource(R.color.colorAccent);
+            } else {
+                buttonRelSouth.setBackgroundResource(R.color.colorPrimaryDark);
+            }
+
+            if (state == KyokuViewModel.States.WAITING_FOR_WEST) {
+                buttonRelWest.setBackgroundResource(R.color.colorAccent);
+            } else {
+                buttonRelWest.setBackgroundResource(R.color.colorPrimaryDark);
+            }
+
+            if (state == KyokuViewModel.States.WAITING_FOR_NORTH) {
+                buttonRelNorth.setBackgroundResource(R.color.colorAccent);
+            } else {
+                buttonRelNorth.setBackgroundResource(R.color.colorPrimaryDark);
+            }
         });
 
-        final Button button = findViewById(R.id.button);
-        button.setOnClickListener(view -> {
-            kyokuViewModel.onEvent(KyokuViewModel.start);
+        kyokuViewModel.getDisplayTime().observe(this, displayTime -> {
+
+        });
+
+        buttonStart.setOnClickListener(view -> {
+            kyokuViewModel.start();
+        });
+
+        buttonRelEast.setOnClickListener(view -> {
+            kyokuViewModel.eastDiscard();
+        });
+
+        buttonRelSouth.setOnClickListener(view -> {
+            kyokuViewModel.southDiscard();
+        });
+
+        buttonRelWest.setOnClickListener(view -> {
+            kyokuViewModel.westDiscard();
+        });
+
+        buttonRelNorth.setOnClickListener(view -> {
+            kyokuViewModel.northDiscard();
         });
     }
 }
