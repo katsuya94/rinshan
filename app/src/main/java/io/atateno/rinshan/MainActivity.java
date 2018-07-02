@@ -7,6 +7,7 @@ import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.view.View;
 import android.arch.lifecycle.ViewModelProviders;
+import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.ImageButton;
 import android.widget.TextView;
@@ -33,9 +34,21 @@ public class MainActivity extends AppCompatActivity {
     }
 
     @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        setImmersiveLandscapeUI();
+    }
+
+    @Override
     public void onResume() {
         super.onResume();
         setImmersiveLandscapeUI();
+    }
+
+    @Override
+    public void onPause() {
+        super.onPause();
+        kyokuViewModel.pause();
     }
 
     @Override
@@ -52,12 +65,13 @@ public class MainActivity extends AppCompatActivity {
         ImageButton imageButtonMenu = findViewById(R.id.imageButtonMenu);
 
         MediaPlayer mp = MediaPlayer.create(this, R.raw.tick);
-
-        kyokuViewModel = ViewModelProviders.of(this).get(KyokuViewModel.class);
-        kyokuViewModel.init(() -> {
+        Runnable tick = () -> {
             mp.seekTo(0);
             mp.start();
-        });
+        };
+
+        kyokuViewModel = ViewModelProviders.of(this).get(KyokuViewModel.class);
+        kyokuViewModel.init(tick);
 
         kyokuViewModel.getState().observe(this, state -> {
             switch (state) {
@@ -71,12 +85,14 @@ public class MainActivity extends AppCompatActivity {
 
             if (state == KyokuViewModel.States.WAITING_FOR_START ||
                     state == KyokuViewModel.States.WAITING_FOR_RESUME) {
+                getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
                 buttonStart.setVisibility(View.VISIBLE);
                 buttonRelEast.setEnabled(false);
                 buttonRelSouth.setEnabled(false);
                 buttonRelWest.setEnabled(false);
                 buttonRelNorth.setEnabled(false);
             } else {
+                getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
                 buttonStart.setVisibility(View.GONE);
                 buttonRelEast.setEnabled(true);
                 buttonRelSouth.setEnabled(true);
@@ -118,6 +134,15 @@ public class MainActivity extends AppCompatActivity {
                     state == KyokuViewModel.States.WAITING_FOR_START) {
                 textViewDisplayTime.setVisibility(View.GONE);
             } else {
+                int colorId;
+                if (time < 5) {
+                    colorId = R.color.colorRed;
+                } else if (time < 10) {
+                    colorId = R.color.colorYellow;
+                } else {
+                    colorId = R.color.colorWhite;
+                }
+                textViewDisplayTime.setTextColor(getResources().getColor(colorId));
                 textViewDisplayTime.setText(time.toString());
                 textViewDisplayTime.setVisibility(View.VISIBLE);
             }
@@ -170,7 +195,7 @@ public class MainActivity extends AppCompatActivity {
                             kyokuViewModel.pause();
                             break;
                         case 1:
-                            kyokuViewModel.pause();
+                            kyokuViewModel.init(tick);
                             finish();
                             break;
                     }
@@ -181,6 +206,7 @@ public class MainActivity extends AppCompatActivity {
                 .setItems(R.array.pause_menu, (dialogInterface, which) -> {
                     switch (which) {
                         case 0:
+                            kyokuViewModel.init(tick);
                             finish();
                             break;
                     }

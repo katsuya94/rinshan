@@ -112,14 +112,18 @@ class KyokuViewModel extends ViewModel {
         }
     }
 
+    private synchronized void update() {
+        setTime(totalTime - elapsedTime());
+        scheduleUpdate(nextTickAt());
+    }
+
     private void scheduleUpdate(long at) {
         cancelUpdateTimer();
         updateTimer = new Timer();
         updateTimer.schedule(new TimerTask() {
             @Override
             public void run() {
-                setTime(totalTime - elapsedTime());
-                scheduleUpdate(nextTickAt());
+                update();
             }
         }, new Date(at));
     }
@@ -170,8 +174,9 @@ class KyokuViewModel extends ViewModel {
         }
     }
 
-    public void init(Runnable onTick) {
+    public synchronized void init(Runnable onTick) {
         cancelUpdateTimer();
+        cancelTickTimer();
 
         extraTime = 30 * 1000;
         baseTime = 10 * 1000;
@@ -198,35 +203,32 @@ class KyokuViewModel extends ViewModel {
         return display;
     }
 
-    public void start() {
+    public synchronized void start() {
         state.setValue(States.WAITING_FOR_EAST);
         resetTime();
     }
 
-    public void eastDiscard() {
+    public synchronized void eastDiscard() {
         handleDiscard(States.WAITING_FOR_SOUTH);
         resetTime();
     }
 
-    public void southDiscard() {
+    public synchronized void southDiscard() {
         handleDiscard(States.WAITING_FOR_WEST);
         resetTime();
     }
 
-    public void westDiscard() {
+    public synchronized void westDiscard() {
         handleDiscard(States.WAITING_FOR_NORTH);
         resetTime();
     }
 
-    public void northDiscard() {
+    public synchronized void northDiscard() {
         handleDiscard(States.WAITING_FOR_EAST);
         resetTime();
     }
 
-    public void pause() {
-        if (state.getValue() == States.WAITING_FOR_RESUME) {
-            return;
-        }
+    public synchronized void pause() {
         cancelUpdateTimer();
         cancelTickTimer();
         pausedAt = System.currentTimeMillis();
@@ -235,7 +237,7 @@ class KyokuViewModel extends ViewModel {
         display.setValue(new Pair<>(States.WAITING_FOR_RESUME, display.getValue().second));
     }
 
-    public void resume() {
+    public synchronized void resume() {
         lastDiscardAt += System.currentTimeMillis() - pausedAt;
         long firstUpdateAt = lastDiscardAt + baseTime;
         if (time > totalTime - baseTime) {
