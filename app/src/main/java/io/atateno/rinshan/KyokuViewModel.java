@@ -3,21 +3,16 @@ package io.atateno.rinshan;
 import android.arch.lifecycle.LiveData;
 import android.arch.lifecycle.MutableLiveData;
 import android.arch.lifecycle.ViewModel;
-import android.util.Log;
 import android.util.Pair;
+
+import org.json.JSONException;
+import org.json.JSONObject;
 
 import java.util.Date;
 import java.util.Timer;
 import java.util.TimerTask;
 
 class KyokuViewModel extends ViewModel {
-    public enum Directions {
-        EAST,
-        SOUTH,
-        WEST,
-        NORTH,
-    }
-
     public enum States {
         WAITING_FOR_START,
         WAITING_FOR_EAST,
@@ -235,18 +230,7 @@ class KyokuViewModel extends ViewModel {
     }
 
     interface Savable {
-        void save(
-                long extraTime,
-                long baseTime,
-                long eastTime,
-                long southTime,
-                long westTime,
-                long northTime,
-                long lastDiscardAt,
-                long pausedAt,
-                long totalTime,
-                long time,
-                States resumeState) throws Exception;
+        void save(String marshalled);
     }
 
     public synchronized void pause(Savable savable) {
@@ -261,22 +245,7 @@ class KyokuViewModel extends ViewModel {
         resumeState = currentState;
         state.setValue(States.WAITING_FOR_RESUME);
         display.setValue(new Pair<>(States.WAITING_FOR_RESUME, display.getValue().second));
-        try {
-            savable.save(
-                    extraTime,
-                    baseTime,
-                    eastTime,
-                    southTime,
-                    westTime,
-                    northTime,
-                    lastDiscardAt,
-                    pausedAt,
-                    totalTime,
-                    time,
-                    resumeState);
-        } catch (Exception e) {
-            Log.d("", "failed to save upon pausing");
-        }
+        savable.save(marshall());
     }
 
     public synchronized void resume() {
@@ -297,31 +266,56 @@ class KyokuViewModel extends ViewModel {
         display.setValue(new Pair<>(resumeState, display.getValue().second));
     }
 
-    public synchronized void load(
-            long extraTime,
-            long baseTime,
-            long eastTime,
-            long southTime,
-            long westTime,
-            long northTime,
-            long lastDiscardAt,
-            long pausedAt,
-            long totalTime,
-            long time,
-            States resumeState,
-            Runnable onTick) {
-        this.extraTime = extraTime;
-        this.baseTime = baseTime;
-        this.eastTime = eastTime;
-        this.southTime = southTime;
-        this.westTime = westTime;
-        this.northTime = northTime;
-        this.lastDiscardAt = lastDiscardAt;
-        this.pausedAt = pausedAt;
-        this.totalTime = totalTime;
-        this.resumeState = resumeState;
-        state.setValue(States.WAITING_FOR_RESUME);
-        setTime(time);
-        this.onTick = onTick;
+    class MarshallException extends RuntimeException {
+        public MarshallException(Throwable cause) {
+            super(cause);
+        }
+    }
+
+    public synchronized String marshall() {
+        try {
+            JSONObject json = new JSONObject();
+            json.put("extraTime", Long.toString(extraTime));
+            json.put("baseTime", Long.toString(baseTime));
+            json.put("eastTime", Long.toString(eastTime));
+            json.put("southTime", Long.toString(southTime));
+            json.put("westTime", Long.toString(westTime));
+            json.put("northTime", Long.toString(northTime));
+            json.put("lastDiscardAt", Long.toString(lastDiscardAt));
+            json.put("pausedAt", Long.toString(pausedAt));
+            json.put("totalTime", Long.toString(totalTime));
+            json.put("time", Long.toString(time));
+            json.put("resumeState", resumeState.toString());
+            return  json.toString();
+        } catch (JSONException e) {
+            throw new MarshallException(e);
+        }
+    }
+
+    class UnmarshallException extends RuntimeException {
+        public UnmarshallException(Throwable cause) {
+            super(cause);
+        }
+    }
+
+    public synchronized void unmarshall(String marshalled, Runnable onTick) {
+        try {
+            JSONObject json = new JSONObject(marshalled);
+            extraTime = Long.parseLong(json.getString("extraTime"));
+            baseTime = Long.parseLong(json.getString("baseTime"));
+            eastTime = Long.parseLong(json.getString("eastTime"));
+            southTime = Long.parseLong(json.getString("southTime"));
+            westTime = Long.parseLong(json.getString("westTime"));
+            northTime = Long.parseLong(json.getString("northTime"));
+            lastDiscardAt = Long.parseLong(json.getString("lastDiscardAt"));
+            pausedAt = Long.parseLong(json.getString("pausedAt"));
+            totalTime = Long.parseLong(json.getString("totalTime"));
+            resumeState = States.valueOf(json.getString("resumeState"));
+            state.setValue(States.WAITING_FOR_RESUME);
+            setTime(Long.parseLong(json.getString("time")));
+            this.onTick = onTick;
+        } catch (JSONException e) {
+            throw new UnmarshallException(e);
+        }
     }
 }
