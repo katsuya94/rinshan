@@ -25,6 +25,14 @@ class KyokuViewModel extends ViewModel {
     private long extraTime;
     private long baseTime;
 
+    public void setExtraTime(int extraTime) {
+        this.extraTime = extraTime * 1000;
+    }
+
+    public void setBaseTime(int baseTime) {
+        this.baseTime = baseTime * 1000;
+    }
+
     private long eastTime;
     private long southTime;
     private long westTime;
@@ -42,8 +50,17 @@ class KyokuViewModel extends ViewModel {
 
     private MutableLiveData<States> state;
     private MutableLiveData<Pair<States, Integer>> display;
+    public LiveData<States> getState() {
+        return state;
+    }
+    public LiveData<Pair<States, Integer>> getDisplay() {
+        return display;
+    }
 
     private Runnable onTick;
+    public void setOnTick(Runnable onTick) {
+        this.onTick = onTick;
+    }
 
     private long getCurrentSeatTime() {
        switch (state.getValue()) {
@@ -89,7 +106,6 @@ class KyokuViewModel extends ViewModel {
             tickTimer = null;
         }
     }
-
 
     private long elapsedTime() {
         return System.currentTimeMillis() - lastDiscardAt;
@@ -167,41 +183,23 @@ class KyokuViewModel extends ViewModel {
         }
     }
 
-    public synchronized void init(Runnable onTick) {
+    public synchronized void init() {
+        state = new MutableLiveData<>();
+        display = new MutableLiveData<>();
+        onTick = () -> {};
+    }
+
+    public synchronized void reset() {
         cancelUpdateTimer();
         cancelTickTimer();
-
-        extraTime = 30 * 1000;
-        baseTime = 10 * 1000;
 
         eastTime = extraTime;
         southTime = extraTime;
         westTime = extraTime;
         northTime = extraTime;
 
-        getState();
         state.setValue(States.WAITING_FOR_START);
-
-        getDisplay();
         display.setValue(new Pair<>(state.getValue(), null));
-
-        this.onTick = onTick;
-    }
-
-    public LiveData<States> getState() {
-        if (state == null) {
-            state = new MutableLiveData<>();
-            state.setValue(States.WAITING_FOR_START);
-        }
-        return state;
-    }
-
-    public LiveData<Pair<States, Integer>> getDisplay() {
-        if (display == null) {
-            display = new MutableLiveData<>();
-            display.setValue(new Pair<>(getState().getValue(), null));
-        }
-        return display;
     }
 
     public synchronized void start() {
@@ -298,7 +296,7 @@ class KyokuViewModel extends ViewModel {
         }
     }
 
-    public synchronized void unmarshall(String marshalled, Runnable onTick) {
+    public synchronized void unmarshall(String marshalled) {
         try {
             JSONObject json = new JSONObject(marshalled);
             extraTime = Long.parseLong(json.getString("extraTime"));
@@ -313,7 +311,6 @@ class KyokuViewModel extends ViewModel {
             resumeState = States.valueOf(json.getString("resumeState"));
             state.setValue(States.WAITING_FOR_RESUME);
             setTime(Long.parseLong(json.getString("time")));
-            this.onTick = onTick;
         } catch (JSONException e) {
             throw new UnmarshallException(e);
         }

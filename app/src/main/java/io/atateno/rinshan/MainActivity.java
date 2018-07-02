@@ -64,6 +64,12 @@ public class MainActivity extends AppCompatActivity {
         kyokuViewModel.pause(savable);
     }
 
+    @Override
+    public void onDestroy() {
+        super.onDestroy();
+        kyokuViewModel.reset();
+    }
+
     private void reset() {
         boolean success = getPreferences(Context.MODE_PRIVATE)
                 .edit()
@@ -72,26 +78,24 @@ public class MainActivity extends AppCompatActivity {
         if (!success) {
             throw new FailedToCommitPreferences();
         }
-        kyokuViewModel.init(getTick());
-    }
-
-    private Runnable tick;
-
-    private Runnable getTick() {
-        MediaPlayer mp = MediaPlayer.create(this, R.raw.tick);
-        if (tick == null) {
-            tick = () -> {
-                mp.seekTo(0);
-                mp.start();
-            };
-        }
-        return tick;
+        kyokuViewModel.reset();
     }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+
+        MediaPlayer mp = MediaPlayer.create(this, R.raw.tick);
+
+        kyokuViewModel = ViewModelProviders.of(this).get(KyokuViewModel.class);
+        kyokuViewModel.init();
+        kyokuViewModel.setBaseTime(5);
+        kyokuViewModel.setExtraTime(15);
+        kyokuViewModel.setOnTick(() -> {
+            mp.seekTo(0);
+            mp.start();
+        });
 
         Button buttonStart = findViewById(R.id.buttonStart);
         Button buttonRelEast = findViewById(R.id.buttonRelEast);
@@ -100,14 +104,6 @@ public class MainActivity extends AppCompatActivity {
         Button buttonRelNorth = findViewById(R.id.buttonRelNorth);
         TextView textViewDisplayTime = findViewById(R.id.textViewDisplayTime);
         ImageButton imageButtonMenu = findViewById(R.id.imageButtonMenu);
-
-        kyokuViewModel = ViewModelProviders.of(this).get(KyokuViewModel.class);
-        kyokuViewModel.init(getTick());
-
-        String marshalled = getPreferences(Context.MODE_PRIVATE).getString("kyokuViewModelState", null);
-        if (marshalled != null) {
-            kyokuViewModel.unmarshall(marshalled, getTick());
-        }
 
         kyokuViewModel.getState().observe(this, state -> {
             switch (state) {
@@ -234,7 +230,6 @@ public class MainActivity extends AppCompatActivity {
                             reset();
                             break;
                         case 2:
-                            reset();
                             finish();
                             break;
                     }
@@ -248,7 +243,6 @@ public class MainActivity extends AppCompatActivity {
                             reset();
                             break;
                         case 1:
-                            reset();
                             finish();
                             break;
                     }
@@ -264,5 +258,11 @@ public class MainActivity extends AppCompatActivity {
                 dialog.show();
             }
         });
+
+        kyokuViewModel.reset();
+        String marshalled = getPreferences(Context.MODE_PRIVATE).getString("kyokuViewModelState", null);
+        if (marshalled != null) {
+            kyokuViewModel.unmarshall(marshalled);
+        }
     }
 }
