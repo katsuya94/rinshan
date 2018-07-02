@@ -143,13 +143,11 @@ class KyokuViewModel extends ViewModel {
 
     private void resetTime() {
         cancelUpdateTimer();
-        long currentSeatTime = getCurrentSeatTime();
         lastDiscardAt = System.currentTimeMillis();
         totalTime = getCurrentSeatTime() + baseTime;
-        long firstUpdateAt = lastDiscardAt + baseTime;
         setTime(totalTime);
         scheduleTicks(firstTickAt());
-        scheduleUpdate(firstUpdateAt);
+        scheduleUpdate(lastDiscardAt + baseTime);
     }
 
     private void handleDiscard(States nextState) {
@@ -186,20 +184,28 @@ class KyokuViewModel extends ViewModel {
         westTime = extraTime;
         northTime = extraTime;
 
-        state = new MutableLiveData<>();
+        getState();
         state.setValue(States.WAITING_FOR_START);
 
-        display = new MutableLiveData<>();
+        getDisplay();
         display.setValue(new Pair<>(state.getValue(), null));
 
         this.onTick = onTick;
     }
 
     public LiveData<States> getState() {
+        if (state == null) {
+            state = new MutableLiveData<>();
+            state.setValue(States.WAITING_FOR_START);
+        }
         return state;
     }
 
     public LiveData<Pair<States, Integer>> getDisplay() {
+        if (display == null) {
+            display = new MutableLiveData<>();
+            display.setValue(new Pair<>(getState().getValue(), null));
+        }
         return display;
     }
 
@@ -228,16 +234,56 @@ class KyokuViewModel extends ViewModel {
         resetTime();
     }
 
-    public synchronized void pause() {
+    interface Savable {
+        void save(
+                long extraTime,
+                long baseTime,
+                long eastTime,
+                long southTime,
+                long westTime,
+                long northTime,
+                long lastDiscardAt,
+                long pausedAt,
+                long totalTime,
+                long time,
+                States resumeState) throws Exception;
+    }
+
+    public synchronized void pause(Savable savable) {
+        States currentState = getState().getValue();
+        if (currentState == States.WAITING_FOR_RESUME ||
+                currentState == States.WAITING_FOR_START) {
+            return;
+        }
         cancelUpdateTimer();
         cancelTickTimer();
         pausedAt = System.currentTimeMillis();
-        resumeState = state.getValue();
+        resumeState = currentState;
         state.setValue(States.WAITING_FOR_RESUME);
         display.setValue(new Pair<>(States.WAITING_FOR_RESUME, display.getValue().second));
+        try {
+            savable.save(
+                    extraTime,
+                    baseTime,
+                    eastTime,
+                    southTime,
+                    westTime,
+                    northTime,
+                    lastDiscardAt,
+                    pausedAt,
+                    totalTime,
+                    time,
+                    resumeState);
+        } catch (Exception e) {
+            Log.d("", "failed to save upon pausing");
+        }
     }
 
     public synchronized void resume() {
+        States currentState = getState().getValue();
+        if (currentState != States.WAITING_FOR_RESUME) {
+            return;
+        }
         lastDiscardAt += System.currentTimeMillis() - pausedAt;
         long firstUpdateAt = lastDiscardAt + baseTime;
         if (time > totalTime - baseTime) {
@@ -249,5 +295,33 @@ class KyokuViewModel extends ViewModel {
         }
         state.setValue(resumeState);
         display.setValue(new Pair<>(resumeState, display.getValue().second));
+    }
+
+    public synchronized void load(
+            long extraTime,
+            long baseTime,
+            long eastTime,
+            long southTime,
+            long westTime,
+            long northTime,
+            long lastDiscardAt,
+            long pausedAt,
+            long totalTime,
+            long time,
+            States resumeState,
+            Runnable onTick) {
+        this.extraTime = extraTime;
+        this.baseTime = baseTime;
+        this.eastTime = eastTime;
+        this.southTime = southTime;
+        this.westTime = westTime;
+        this.northTime = northTime;
+        this.lastDiscardAt = lastDiscardAt;
+        this.pausedAt = pausedAt;
+        this.totalTime = totalTime;
+        this.resumeState = resumeState;
+        state.setValue(States.WAITING_FOR_RESUME);
+        setTime(time);
+        this.onTick = onTick;
     }
 }

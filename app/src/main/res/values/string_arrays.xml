@@ -1,9 +1,11 @@
 <resources>
     <string-array name="menu">
         <item>中断</item>
+        <item>やり直す</item>
         <item>やめる</item>
     </string-array>
     <string-array name="pause_menu">
+        <item>やり直す</item>
         <item>やめる</item>
     </string-array>
 </resources>

@@ -1,10 +1,13 @@
 package io.atateno.rinshan;
 
 import android.app.AlertDialog;
+import android.content.Context;
+import android.content.SharedPreferences;
 import android.content.pm.ActivityInfo;
 import android.media.MediaPlayer;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.View;
 import android.arch.lifecycle.ViewModelProviders;
 import android.view.WindowManager;
@@ -13,7 +16,43 @@ import android.widget.ImageButton;
 import android.widget.TextView;
 
 public class MainActivity extends AppCompatActivity {
+    class FailedToCommitPreferences extends Exception {};
+
     private KyokuViewModel kyokuViewModel;
+
+    private final KyokuViewModel.Savable savable = new KyokuViewModel.Savable() {
+        @Override
+        public void save(
+                long extraTime,
+                long baseTime,
+                long eastTime,
+                long southTime,
+                long westTime,
+                long northTime,
+                long lastDiscardAt,
+                long pausedAt,
+                long totalTime,
+                long time,
+                KyokuViewModel.States resumeState) throws Exception {
+            Log.d("", "saving");
+            SharedPreferences.Editor editor = getPreferences(Context.MODE_PRIVATE).edit()
+                    .putBoolean("paused", true)
+                    .putLong("extraTime", extraTime)
+                    .putLong("baseTime", baseTime)
+                    .putLong("eastTime", eastTime)
+                    .putLong("southTime", southTime)
+                    .putLong("westTime", westTime)
+                    .putLong("northTime", northTime)
+                    .putLong("lastDiscardAt", lastDiscardAt)
+                    .putLong("pausedAt", pausedAt)
+                    .putLong("totalTime", totalTime)
+                    .putLong("time", time)
+                    .putString("resumeState", resumeState.name());
+            if(!editor.commit()) {
+                throw new FailedToCommitPreferences();
+            }
+        }
+    };
 
     private void setImmersiveLandscapeUI() {
         // Enables regular immersive mode.
@@ -48,7 +87,29 @@ public class MainActivity extends AppCompatActivity {
     @Override
     public void onPause() {
         super.onPause();
-        kyokuViewModel.pause();
+        kyokuViewModel.pause(savable);
+    }
+
+    private void reset() {
+        if (getPreferences(Context.MODE_PRIVATE).edit().clear().commit()) {
+            Log.d("", String.format("reset preferences: %s", getPreferences(Context.MODE_PRIVATE).getBoolean("paused", true)));
+        } else {
+            Log.d("", "failed to reset preferences");
+        }
+        kyokuViewModel.init(getTick());
+    }
+
+    private Runnable tick;
+
+    private Runnable getTick() {
+        MediaPlayer mp = MediaPlayer.create(this, R.raw.tick);
+        if (tick == null) {
+            tick = () -> {
+                mp.seekTo(0);
+                mp.start();
+            };
+        }
+        return tick;
     }
 
     @Override
@@ -64,16 +125,29 @@ public class MainActivity extends AppCompatActivity {
         TextView textViewDisplayTime = findViewById(R.id.textViewDisplayTime);
         ImageButton imageButtonMenu = findViewById(R.id.imageButtonMenu);
 
-        MediaPlayer mp = MediaPlayer.create(this, R.raw.tick);
-        Runnable tick = () -> {
-            mp.seekTo(0);
-            mp.start();
-        };
-
         kyokuViewModel = ViewModelProviders.of(this).get(KyokuViewModel.class);
-        kyokuViewModel.init(tick);
+        kyokuViewModel.init(getTick());
+
+        SharedPreferences preferences = getPreferences(Context.MODE_PRIVATE);
+        if (preferences.getBoolean("paused", false)) {
+            Log.d("", "loading from preferences");
+            kyokuViewModel.load(
+                    preferences.getLong("extraTime", 0),
+                    preferences.getLong("baseTime", 0),
+                    preferences.getLong("eastTime", 0),
+                    preferences.getLong("southTime", 0),
+                    preferences.getLong("westTime", 0),
+                    preferences.getLong("northTime", 0),
+                    preferences.getLong("lastDiscardAt", 0),
+                    preferences.getLong("pausedAt", 0),
+                    preferences.getLong("totalTime", 0),
+                    preferences.getLong("time", 0),
+                    KyokuViewModel.States.valueOf(preferences.getString("resumeState", "")),
+                    getTick());
+        }
 
         kyokuViewModel.getState().observe(this, state -> {
+            Log.d("", String.format("observed state: %s", state.name()));
             switch (state) {
                 case WAITING_FOR_START:
                     buttonStart.setText(R.string.start);
@@ -168,6 +242,9 @@ public class MainActivity extends AppCompatActivity {
             if (state == KyokuViewModel.States.WAITING_FOR_START) {
                 kyokuViewModel.start();
             } else if (state == KyokuViewModel.States.WAITING_FOR_RESUME) {
+                if(getPreferences(Context.MODE_PRIVATE).edit().putBoolean("paused", false).commit()) {
+                    Log.d("", String.format("marked as unpaused: %s", getPreferences(Context.MODE_PRIVATE).getBoolean("paused", true)));
+                }
                 kyokuViewModel.resume();
             }
         });
@@ -192,10 +269,13 @@ public class MainActivity extends AppCompatActivity {
                 .setItems(R.array.menu, (dialogInterface, which) -> {
                     switch (which) {
                         case 0:
-                            kyokuViewModel.pause();
+                            kyokuViewModel.pause(savable);
                             break;
                         case 1:
-                            kyokuViewModel.init(tick);
+                            reset();
+                            break;
+                        case 2:
+                            reset();
                             finish();
                             break;
                     }
@@ -206,7 +286,11 @@ public class MainActivity extends AppCompatActivity {
                 .setItems(R.array.pause_menu, (dialogInterface, which) -> {
                     switch (which) {
                         case 0:
-                            kyokuViewModel.init(tick);
+                            reset();
+                            kyokuViewModel.init(getTick());
+                            break;
+                        case 1:
+                            reset();
                             finish();
                             break;
                     }
