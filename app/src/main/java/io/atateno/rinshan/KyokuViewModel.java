@@ -3,8 +3,10 @@ package io.atateno.rinshan;
 import android.arch.lifecycle.LiveData;
 import android.arch.lifecycle.MutableLiveData;
 import android.arch.lifecycle.ViewModel;
+import android.util.Log;
 import android.util.Pair;
 
+import java.util.Date;
 import java.util.Timer;
 import java.util.TimerTask;
 
@@ -22,6 +24,7 @@ class KyokuViewModel extends ViewModel {
         WAITING_FOR_SOUTH,
         WAITING_FOR_WEST,
         WAITING_FOR_NORTH,
+        WAITING_FOR_RESUME,
     }
 
     private long extraTime;
@@ -32,11 +35,20 @@ class KyokuViewModel extends ViewModel {
     private long westTime;
     private long northTime;
 
-    private Timer timer;
+    private long lastDiscardAt;
+    private long pausedAt;
+    private long totalTime;
     private long time;
+
+    private Timer updateTimer;
+    private Timer tickTimer;
+
+    private States resumeState;
 
     private MutableLiveData<States> state;
     private MutableLiveData<Pair<States, Integer>> display;
+
+    private Runnable onTick;
 
     private long getCurrentSeatTime() {
        switch (state.getValue()) {
@@ -52,45 +64,115 @@ class KyokuViewModel extends ViewModel {
        return 0;
     }
 
-    private void setTime(long time) {
-        this.time = time;
-        if (this.time < extraTime) {
-            if (this.time >= 0) {
-                display.postValue(new Pair<>(state.getValue(), new Integer((int) (this.time + 999) / 1000)));
-            } else {
-                display.postValue(new Pair<>(state.getValue(), new Integer((int) this.time / 1000)));
-            }
+    private long ceilTime() {
+        if (time >= 0) {
+            return (time + 999) / 1000;
         } else {
-            display.postValue(new Pair<>(state.getValue(), null));
+            return time / 1000;
         }
     }
 
-    private void scheduleTick(long in) {
-        long scheduledAt = System.currentTimeMillis();
-        if (timer != null) {
-            timer.cancel();
+    private void setTime(long t) {
+        time = t;
+        Integer integer = null;
+        if (time < totalTime - baseTime) {
+            integer = new Integer((int)ceilTime());
         }
-        timer = new Timer();
-        timer.schedule(new TimerTask() {
+        display.postValue(new Pair<>(state.getValue(), integer));
+    }
+
+    private void cancelUpdateTimer() {
+        if (updateTimer != null) {
+            updateTimer.cancel();
+            updateTimer = null;
+        }
+    }
+
+    private void cancelTickTimer() {
+        if (tickTimer != null) {
+            tickTimer.cancel();
+            tickTimer = null;
+        }
+    }
+
+
+    private long elapsedTime() {
+        return System.currentTimeMillis() - lastDiscardAt;
+    }
+
+    private long firstTickAt() {
+        return lastDiscardAt + totalTime - ((totalTime - baseTime + 999) / 1000 - 1) * 1000;
+    }
+
+    private long nextTickAt() {
+        if (time >= 0) {
+            return lastDiscardAt + totalTime - ((time + 999) / 1000 - 1) * 1000;
+        } else {
+            return lastDiscardAt + totalTime - (time / 1000 + 1) * 1000;
+        }
+    }
+
+    private void scheduleUpdate(long at) {
+        cancelUpdateTimer();
+        updateTimer = new Timer();
+        updateTimer.schedule(new TimerTask() {
             @Override
             public void run() {
-                long elapsed = System.currentTimeMillis() - scheduledAt;
-                setTime(time - elapsed);
-                scheduleTick(((time % 1000) + 1000) % 1000);
+                setTime(totalTime - elapsedTime());
+                scheduleUpdate(nextTickAt());
             }
-        }, in);
+        }, new Date(at));
+    }
+
+    private void scheduleTicks(long starting) {
+        if (tickTimer != null) {
+            tickTimer.cancel();
+        }
+        tickTimer = new Timer();
+        tickTimer.schedule(new TimerTask() {
+            @Override
+            public void run() {
+                onTick.run();
+            }
+        }, new Date(starting), 1000);
     }
 
     private void resetTime() {
-        setTime(getCurrentSeatTime() + baseTime);
-        if (time < extraTime) {
-            scheduleTick(time % 1000);
-        } else {
-            scheduleTick(time - extraTime);
+        cancelUpdateTimer();
+        long currentSeatTime = getCurrentSeatTime();
+        lastDiscardAt = System.currentTimeMillis();
+        totalTime = getCurrentSeatTime() + baseTime;
+        long firstUpdateAt = lastDiscardAt + baseTime;
+        setTime(totalTime);
+        scheduleTicks(firstTickAt());
+        scheduleUpdate(firstUpdateAt);
+    }
+
+    private void handleDiscard(States nextState) {
+        state.setValue(nextState);
+        long elapsedTime = elapsedTime();
+        if (elapsedTime <= baseTime) {
+            return;
+        }
+        switch (nextState) {
+            case WAITING_FOR_EAST:
+                northTime -= elapsedTime - baseTime;
+                break;
+            case WAITING_FOR_SOUTH:
+                eastTime -= elapsedTime - baseTime;
+                break;
+            case WAITING_FOR_WEST:
+                southTime -= elapsedTime - baseTime;
+                break;
+            case WAITING_FOR_NORTH:
+                westTime -= elapsedTime - baseTime;
+                break;
         }
     }
 
-    public void init() {
+    public void init(Runnable onTick) {
+        cancelUpdateTimer();
+
         extraTime = 30 * 1000;
         baseTime = 10 * 1000;
 
@@ -104,6 +186,8 @@ class KyokuViewModel extends ViewModel {
 
         display = new MutableLiveData<>();
         display.setValue(new Pair<>(state.getValue(), null));
+
+        this.onTick = onTick;
     }
 
     public LiveData<States> getState() {
@@ -120,22 +204,48 @@ class KyokuViewModel extends ViewModel {
     }
 
     public void eastDiscard() {
-        state.setValue(States.WAITING_FOR_SOUTH);
+        handleDiscard(States.WAITING_FOR_SOUTH);
         resetTime();
     }
 
     public void southDiscard() {
-        state.setValue(States.WAITING_FOR_WEST);
+        handleDiscard(States.WAITING_FOR_WEST);
         resetTime();
     }
 
     public void westDiscard() {
-        state.setValue(States.WAITING_FOR_NORTH);
+        handleDiscard(States.WAITING_FOR_NORTH);
         resetTime();
     }
 
     public void northDiscard() {
-        state.setValue(States.WAITING_FOR_EAST);
+        handleDiscard(States.WAITING_FOR_EAST);
         resetTime();
+    }
+
+    public void pause() {
+        if (state.getValue() == States.WAITING_FOR_RESUME) {
+            return;
+        }
+        cancelUpdateTimer();
+        cancelTickTimer();
+        pausedAt = System.currentTimeMillis();
+        resumeState = state.getValue();
+        state.setValue(States.WAITING_FOR_RESUME);
+        display.setValue(new Pair<>(States.WAITING_FOR_RESUME, display.getValue().second));
+    }
+
+    public void resume() {
+        lastDiscardAt += System.currentTimeMillis() - pausedAt;
+        long firstUpdateAt = lastDiscardAt + baseTime;
+        if (time > totalTime - baseTime) {
+            scheduleTicks(firstTickAt());
+            scheduleUpdate(firstUpdateAt);
+        } else {
+            scheduleTicks(nextTickAt());
+            scheduleUpdate(nextTickAt());
+        }
+        state.setValue(resumeState);
+        display.setValue(new Pair<>(resumeState, display.getValue().second));
     }
 }

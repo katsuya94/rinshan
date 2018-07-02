@@ -1,13 +1,14 @@
 package io.atateno.rinshan;
 
-import android.arch.lifecycle.MediatorLiveData;
+import android.app.AlertDialog;
 import android.content.pm.ActivityInfo;
+import android.media.MediaPlayer;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
-import android.util.Pair;
 import android.view.View;
 import android.arch.lifecycle.ViewModelProviders;
 import android.widget.Button;
+import android.widget.ImageButton;
 import android.widget.TextView;
 
 public class MainActivity extends AppCompatActivity {
@@ -31,9 +32,6 @@ public class MainActivity extends AppCompatActivity {
         setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
     }
 
-    public void startKyoku(View view) {
-    }
-
     @Override
     public void onResume() {
         super.onResume();
@@ -46,17 +44,33 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
 
         Button buttonStart = findViewById(R.id.buttonStart);
-        Button buttonRelEast = findViewById((R.id.buttonRelEast));
-        Button buttonRelSouth = findViewById((R.id.buttonRelSouth));
-        Button buttonRelWest = findViewById((R.id.buttonRelWest));
-        Button buttonRelNorth = findViewById((R.id.buttonRelNorth));
-        TextView textViewDisplayTime = findViewById((R.id.textViewDisplayTime));
+        Button buttonRelEast = findViewById(R.id.buttonRelEast);
+        Button buttonRelSouth = findViewById(R.id.buttonRelSouth);
+        Button buttonRelWest = findViewById(R.id.buttonRelWest);
+        Button buttonRelNorth = findViewById(R.id.buttonRelNorth);
+        TextView textViewDisplayTime = findViewById(R.id.textViewDisplayTime);
+        ImageButton imageButtonMenu = findViewById(R.id.imageButtonMenu);
+
+        MediaPlayer mp = MediaPlayer.create(this, R.raw.tick);
 
         kyokuViewModel = ViewModelProviders.of(this).get(KyokuViewModel.class);
-        kyokuViewModel.init();
+        kyokuViewModel.init(() -> {
+            mp.seekTo(0);
+            mp.start();
+        });
 
         kyokuViewModel.getState().observe(this, state -> {
-            if (state == KyokuViewModel.States.WAITING_FOR_START) {
+            switch (state) {
+                case WAITING_FOR_START:
+                    buttonStart.setText(R.string.start);
+                    break;
+                case WAITING_FOR_RESUME:
+                    buttonStart.setText(R.string.resume);
+                    break;
+            }
+
+            if (state == KyokuViewModel.States.WAITING_FOR_START ||
+                    state == KyokuViewModel.States.WAITING_FOR_RESUME) {
                 buttonStart.setVisibility(View.VISIBLE);
                 buttonRelEast.setEnabled(false);
                 buttonRelSouth.setEnabled(false);
@@ -69,7 +83,7 @@ public class MainActivity extends AppCompatActivity {
                 buttonRelWest.setEnabled(true);
                 buttonRelNorth.setEnabled(true);
             }
-            
+
             if (state == KyokuViewModel.States.WAITING_FOR_EAST) {
                 buttonRelEast.setBackgroundResource(R.color.colorAccent);
             } else {
@@ -99,7 +113,9 @@ public class MainActivity extends AppCompatActivity {
             KyokuViewModel.States state = display.first;
             Integer time = display.second;
 
-            if (time == null) {
+            if (time == null ||
+                    state == KyokuViewModel.States.WAITING_FOR_RESUME ||
+                    state == KyokuViewModel.States.WAITING_FOR_START) {
                 textViewDisplayTime.setVisibility(View.GONE);
             } else {
                 textViewDisplayTime.setText(time.toString());
@@ -123,7 +139,12 @@ public class MainActivity extends AppCompatActivity {
         });
 
         buttonStart.setOnClickListener(view -> {
-            kyokuViewModel.start();
+            KyokuViewModel.States state = kyokuViewModel.getState().getValue();
+            if (state == KyokuViewModel.States.WAITING_FOR_START) {
+                kyokuViewModel.start();
+            } else if (state == KyokuViewModel.States.WAITING_FOR_RESUME) {
+                kyokuViewModel.resume();
+            }
         });
 
         buttonRelEast.setOnClickListener(view -> {
@@ -140,6 +161,40 @@ public class MainActivity extends AppCompatActivity {
 
         buttonRelNorth.setOnClickListener(view -> {
             kyokuViewModel.northDiscard();
+        });
+
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setItems(R.array.menu, (dialogInterface, which) -> {
+                    switch (which) {
+                        case 0:
+                            kyokuViewModel.pause();
+                            break;
+                        case 1:
+                            kyokuViewModel.pause();
+                            finish();
+                            break;
+                    }
+                })
+                .create();
+
+        AlertDialog pauseDialog = new AlertDialog.Builder(this)
+                .setItems(R.array.pause_menu, (dialogInterface, which) -> {
+                    switch (which) {
+                        case 0:
+                            finish();
+                            break;
+                    }
+                })
+                .create();
+
+        imageButtonMenu.setOnClickListener(view -> {
+            KyokuViewModel.States state = kyokuViewModel.getState().getValue();
+            if (state == KyokuViewModel.States.WAITING_FOR_START ||
+                    state == KyokuViewModel.States.WAITING_FOR_RESUME) {
+                pauseDialog.show();
+            } else {
+                dialog.show();
+            }
         });
     }
 }
