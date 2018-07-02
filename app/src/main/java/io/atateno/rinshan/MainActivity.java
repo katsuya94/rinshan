@@ -6,6 +6,7 @@ import android.content.pm.ActivityInfo;
 import android.media.MediaPlayer;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.View;
 import android.arch.lifecycle.ViewModelProviders;
 import android.view.WindowManager;
@@ -256,10 +257,15 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-        kyokuViewModel.reset();
         String marshalled = getPreferences(Context.MODE_PRIVATE).getString("kyokuViewModelState", null);
         if (marshalled != null) {
-            kyokuViewModel.unmarshall(marshalled);
+            try {
+                kyokuViewModel.unmarshall(marshalled);
+            } catch (KyokuViewModel.UnmarshallException e) {
+                reset();
+            }
+        } else {
+            reset();
         }
     }
 }

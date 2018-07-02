@@ -44,7 +44,7 @@ class KyokuViewModel extends ViewModel {
 
     private long lastDiscardAt;
     private long pausedAt;
-    private long totalTime;
+    private long currentSeatTime;
     private long time;
 
     private Timer updateTimer;
@@ -96,7 +96,7 @@ class KyokuViewModel extends ViewModel {
     private void setTime(long t) {
         time = t;
         Integer integer = null;
-        if (time < totalTime - baseTime) {
+        if (time < currentSeatTime) {
             integer = new Integer((int)ceilTime());
         }
         display.postValue(new Pair<>(state.getValue(), integer));
@@ -119,22 +119,22 @@ class KyokuViewModel extends ViewModel {
     private long elapsedTime() {
         return System.currentTimeMillis() - lastDiscardAt;
     }
-
-    private long firstTickAt() {
-        return lastDiscardAt + totalTime - ((totalTime - baseTime + 999) / 1000 - 1) * 1000;
+    
+    private long zeroRemainingTimeAt() {
+        return lastDiscardAt + currentSeatTime + baseTime;
     }
 
-    private long nextTickAt() {
-        if (time >= 0) {
-            return lastDiscardAt + totalTime - ((time + 999) / 1000 - 1) * 1000;
+    private long nextTickAt(long remainingTime) {
+        if (remainingTime >= 0) {
+            return zeroRemainingTimeAt() - ((remainingTime + 999) / 1000 - 1) * 1000;
         } else {
-            return lastDiscardAt + totalTime - (time / 1000 + 1) * 1000;
+            return zeroRemainingTimeAt() - (remainingTime / 1000 + 1) * 1000;
         }
     }
 
     private synchronized void update() {
-        setTime(totalTime - elapsedTime());
-        scheduleUpdate(nextTickAt());
+        setTime(currentSeatTime + baseTime - elapsedTime());
+        scheduleUpdate(nextTickAt(time));
     }
 
     private void scheduleUpdate(long at) {
@@ -149,9 +149,7 @@ class KyokuViewModel extends ViewModel {
     }
 
     private void scheduleTicks(long starting) {
-        if (tickTimer != null) {
-            tickTimer.cancel();
-        }
+        cancelTickTimer();
         tickTimer = new Timer();
         tickTimer.schedule(new TimerTask() {
             @Override
@@ -164,9 +162,9 @@ class KyokuViewModel extends ViewModel {
     private void resetTime() {
         cancelUpdateTimer();
         lastDiscardAt = System.currentTimeMillis();
-        totalTime = getCurrentSeatTime() + baseTime;
-        setTime(totalTime);
-        scheduleTicks(firstTickAt());
+        currentSeatTime = getCurrentSeatTime();
+        setTime(currentSeatTime + baseTime);
+        scheduleTicks(nextTickAt(currentSeatTime));
         scheduleUpdate(lastDiscardAt + baseTime);
     }
 
@@ -258,12 +256,12 @@ class KyokuViewModel extends ViewModel {
         }
         lastDiscardAt += System.currentTimeMillis() - pausedAt;
         long firstUpdateAt = lastDiscardAt + baseTime;
-        if (time > totalTime - baseTime) {
-            scheduleTicks(firstTickAt());
+        if (time > currentSeatTime) {
+            scheduleTicks(nextTickAt(currentSeatTime));
             scheduleUpdate(firstUpdateAt);
         } else {
-            scheduleTicks(nextTickAt());
-            scheduleUpdate(nextTickAt());
+            scheduleTicks(nextTickAt(time));
+            scheduleUpdate(nextTickAt(time));
         }
         state.setValue(resumeState);
         setTime(time);
@@ -286,7 +284,7 @@ class KyokuViewModel extends ViewModel {
             json.put("northTime", Long.toString(northTime));
             json.put("lastDiscardAt", Long.toString(lastDiscardAt));
             json.put("pausedAt", Long.toString(pausedAt));
-            json.put("totalTime", Long.toString(totalTime));
+            json.put("currentSeatTime", Long.toString(currentSeatTime));
             json.put("time", Long.toString(time));
             json.put("resumeState", resumeState.toString());
             return json.toString();
@@ -312,7 +310,7 @@ class KyokuViewModel extends ViewModel {
             northTime = Long.parseLong(json.getString("northTime"));
             lastDiscardAt = Long.parseLong(json.getString("lastDiscardAt"));
             pausedAt = Long.parseLong(json.getString("pausedAt"));
-            totalTime = Long.parseLong(json.getString("totalTime"));
+            currentSeatTime = Long.parseLong(json.getString("currentSeatTime"));
             resumeState = States.valueOf(json.getString("resumeState"));
             state.setValue(States.WAITING_FOR_RESUME);
             setTime(Long.parseLong(json.getString("time")));
