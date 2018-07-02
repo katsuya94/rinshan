@@ -29,11 +29,11 @@ class KyokuViewModel extends ViewModel {
     private long extraTime;
     private long baseTime;
 
-    public void setExtraTime(int extraTime) {
+    public synchronized void setExtraTime(int extraTime) {
         this.extraTime = extraTime * 1000;
     }
 
-    public void setBaseTime(int baseTime) {
+    public synchronized void setBaseTime(int baseTime) {
         this.baseTime = baseTime * 1000;
     }
 
@@ -62,16 +62,16 @@ class KyokuViewModel extends ViewModel {
     }
 
     private Runnable onTick;
-    public void setOnTick(Runnable onTick) {
+    public synchronized void setOnTick(Runnable onTick) {
         this.onTick = onTick;
     }
 
     private Savable onPause;
-    public void setOnPause(Savable onPause) {
+    public synchronized void setOnPause(Savable onPause) {
         this.onPause = onPause;
     }
 
-    private long getCurrentSeatTime() {
+    private synchronized long getCurrentSeatTime() {
        switch (state.getValue()) {
            case WAITING_FOR_EAST:
                return eastTime;
@@ -85,7 +85,7 @@ class KyokuViewModel extends ViewModel {
        return 0;
     }
 
-    private long ceilTime() {
+    private synchronized long ceilTime() {
         if (time >= 0) {
             return (time + 999) / 1000;
         } else {
@@ -93,7 +93,7 @@ class KyokuViewModel extends ViewModel {
         }
     }
 
-    private void setTime(long t) {
+    private synchronized void setTime(long t) {
         time = t;
         Integer integer = null;
         if (time < currentSeatTime) {
@@ -102,29 +102,29 @@ class KyokuViewModel extends ViewModel {
         display.postValue(new Pair<>(state.getValue(), integer));
     }
 
-    private void cancelUpdateTimer() {
+    private synchronized void cancelUpdateTimer() {
         if (updateTimer != null) {
             updateTimer.cancel();
             updateTimer = null;
         }
     }
 
-    private void cancelTickTimer() {
+    private synchronized void cancelTickTimer() {
         if (tickTimer != null) {
             tickTimer.cancel();
             tickTimer = null;
         }
     }
 
-    private long elapsedTime() {
-        return System.currentTimeMillis() - lastDiscardAt;
-    }
-    
-    private long zeroRemainingTimeAt() {
+    private synchronized long zeroRemainingTimeAt() {
         return lastDiscardAt + currentSeatTime + baseTime;
     }
 
-    private long nextTickAt(long remainingTime) {
+    private synchronized long remainingTime() {
+        return zeroRemainingTimeAt() - System.currentTimeMillis();
+    }
+
+    private synchronized long nextTickAt(long remainingTime) {
         if (remainingTime >= 0) {
             return zeroRemainingTimeAt() - ((remainingTime + 999) / 1000 - 1) * 1000;
         } else {
@@ -133,11 +133,11 @@ class KyokuViewModel extends ViewModel {
     }
 
     private synchronized void update() {
-        setTime(currentSeatTime + baseTime - elapsedTime());
+        setTime(remainingTime());
         scheduleUpdate(nextTickAt(time));
     }
 
-    private void scheduleUpdate(long at) {
+    private synchronized void scheduleUpdate(long at) {
         cancelUpdateTimer();
         updateTimer = new Timer();
         updateTimer.schedule(new TimerTask() {
@@ -148,7 +148,7 @@ class KyokuViewModel extends ViewModel {
         }, new Date(at));
     }
 
-    private void scheduleTicks(long starting) {
+    private synchronized void scheduleTicks(long starting) {
         cancelTickTimer();
         tickTimer = new Timer();
         tickTimer.schedule(new TimerTask() {
@@ -159,8 +159,9 @@ class KyokuViewModel extends ViewModel {
         }, new Date(starting), 1000);
     }
 
-    private void resetTime() {
+    private synchronized void resetTime() {
         cancelUpdateTimer();
+        cancelTickTimer();
         lastDiscardAt = System.currentTimeMillis();
         currentSeatTime = getCurrentSeatTime();
         setTime(currentSeatTime + baseTime);
@@ -168,24 +169,24 @@ class KyokuViewModel extends ViewModel {
         scheduleUpdate(lastDiscardAt + baseTime);
     }
 
-    private void handleDiscard(States nextState) {
+    private synchronized void handleDiscard(States nextState) {
         state.setValue(nextState);
-        long elapsedTime = elapsedTime();
-        if (elapsedTime <= baseTime) {
+        long remainingTime = remainingTime();
+        if (remainingTime >= currentSeatTime) {
             return;
         }
         switch (nextState) {
             case WAITING_FOR_EAST:
-                northTime -= elapsedTime - baseTime;
+                northTime -= currentSeatTime - remainingTime;
                 break;
             case WAITING_FOR_SOUTH:
-                eastTime -= elapsedTime - baseTime;
+                eastTime -= currentSeatTime - remainingTime;
                 break;
             case WAITING_FOR_WEST:
-                southTime -= elapsedTime - baseTime;
+                southTime -= currentSeatTime - remainingTime;
                 break;
             case WAITING_FOR_NORTH:
-                westTime -= elapsedTime - baseTime;
+                westTime -= currentSeatTime - remainingTime;
                 break;
         }
     }
