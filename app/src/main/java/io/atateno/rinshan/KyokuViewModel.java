@@ -13,6 +13,10 @@ import java.util.Timer;
 import java.util.TimerTask;
 
 class KyokuViewModel extends ViewModel {
+    interface Savable {
+        void save(String marshalled);
+    }
+
     public enum States {
         WAITING_FOR_START,
         WAITING_FOR_EAST,
@@ -60,6 +64,11 @@ class KyokuViewModel extends ViewModel {
     private Runnable onTick;
     public void setOnTick(Runnable onTick) {
         this.onTick = onTick;
+    }
+
+    private Savable onPause;
+    public void setOnPause(Savable onPause) {
+        this.onPause = onPause;
     }
 
     private long getCurrentSeatTime() {
@@ -187,6 +196,7 @@ class KyokuViewModel extends ViewModel {
         state = new MutableLiveData<>();
         display = new MutableLiveData<>();
         onTick = () -> {};
+        onPause = (marshalled) -> {};
     }
 
     public synchronized void reset() {
@@ -227,12 +237,8 @@ class KyokuViewModel extends ViewModel {
         resetTime();
     }
 
-    interface Savable {
-        void save(String marshalled);
-    }
-
-    public synchronized void pause(Savable savable) {
-        States currentState = getState().getValue();
+    public synchronized void pause() {
+        States currentState = state.getValue();
         if (currentState == States.WAITING_FOR_RESUME ||
                 currentState == States.WAITING_FOR_START) {
             return;
@@ -242,13 +248,12 @@ class KyokuViewModel extends ViewModel {
         pausedAt = System.currentTimeMillis();
         resumeState = currentState;
         state.setValue(States.WAITING_FOR_RESUME);
-        display.setValue(new Pair<>(States.WAITING_FOR_RESUME, display.getValue().second));
-        savable.save(marshall());
+        setTime(time);
+        onPause.save(marshall());
     }
 
     public synchronized void resume() {
-        States currentState = getState().getValue();
-        if (currentState != States.WAITING_FOR_RESUME) {
+        if (state.getValue() != States.WAITING_FOR_RESUME) {
             return;
         }
         lastDiscardAt += System.currentTimeMillis() - pausedAt;
@@ -261,7 +266,7 @@ class KyokuViewModel extends ViewModel {
             scheduleUpdate(nextTickAt());
         }
         state.setValue(resumeState);
-        display.setValue(new Pair<>(resumeState, display.getValue().second));
+        setTime(time);
     }
 
     class MarshallException extends RuntimeException {
@@ -284,7 +289,7 @@ class KyokuViewModel extends ViewModel {
             json.put("totalTime", Long.toString(totalTime));
             json.put("time", Long.toString(time));
             json.put("resumeState", resumeState.toString());
-            return  json.toString();
+            return json.toString();
         } catch (JSONException e) {
             throw new MarshallException(e);
         }

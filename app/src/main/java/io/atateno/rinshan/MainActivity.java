@@ -18,16 +18,6 @@ public class MainActivity extends AppCompatActivity {
 
     private KyokuViewModel kyokuViewModel;
 
-    private final KyokuViewModel.Savable savable = marshalled -> {
-        boolean success = getPreferences(Context.MODE_PRIVATE)
-                .edit()
-                .putString("kyokuViewModelState", marshalled)
-                .commit();
-        if (!success) {
-            throw new FailedToCommitPreferences();
-        }
-    };
-
     private void setImmersiveLandscapeUI() {
         // Enables regular immersive mode.
         // For "lean back" mode, remove SYSTEM_UI_FLAG_IMMERSIVE.
@@ -46,6 +36,17 @@ public class MainActivity extends AppCompatActivity {
         setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
     }
 
+    private void reset() {
+        boolean success = getPreferences(Context.MODE_PRIVATE)
+                .edit()
+                .remove("kyokuViewModelState")
+                .commit();
+        if (!success) {
+            throw new FailedToCommitPreferences();
+        }
+        kyokuViewModel.reset();
+    }
+
     @Override
     public void onWindowFocusChanged(boolean hasFocus) {
         super.onWindowFocusChanged(hasFocus);
@@ -61,24 +62,11 @@ public class MainActivity extends AppCompatActivity {
     @Override
     public void onPause() {
         super.onPause();
-        kyokuViewModel.pause(savable);
-    }
-
-    @Override
-    public void onDestroy() {
-        super.onDestroy();
-        kyokuViewModel.reset();
-    }
-
-    private void reset() {
-        boolean success = getPreferences(Context.MODE_PRIVATE)
-                .edit()
-                .remove("kyokuViewModelState")
-                .commit();
-        if (!success) {
-            throw new FailedToCommitPreferences();
+        if (isFinishing()) {
+            reset();
+        } else {
+            kyokuViewModel.pause();
         }
-        kyokuViewModel.reset();
     }
 
     @Override
@@ -95,6 +83,15 @@ public class MainActivity extends AppCompatActivity {
         kyokuViewModel.setOnTick(() -> {
             mp.seekTo(0);
             mp.start();
+        });
+        kyokuViewModel.setOnPause(marshalled -> {
+            boolean success = getPreferences(Context.MODE_PRIVATE)
+                    .edit()
+                    .putString("kyokuViewModelState", marshalled)
+                    .commit();
+            if (!success) {
+                throw new FailedToCommitPreferences();
+            }
         });
 
         Button buttonStart = findViewById(R.id.buttonStart);
@@ -224,7 +221,7 @@ public class MainActivity extends AppCompatActivity {
                 .setItems(R.array.menu, (dialogInterface, which) -> {
                     switch (which) {
                         case 0:
-                            kyokuViewModel.pause(savable);
+                            kyokuViewModel.pause();
                             break;
                         case 1:
                             reset();
