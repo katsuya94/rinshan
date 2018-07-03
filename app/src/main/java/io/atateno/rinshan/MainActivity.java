@@ -4,7 +4,9 @@ import android.app.AlertDialog;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.ActivityInfo;
+import android.content.res.ColorStateList;
 import android.media.MediaPlayer;
+import android.support.v4.view.ViewCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.view.View;
@@ -136,27 +138,27 @@ public class MainActivity extends AppCompatActivity {
             }
 
             if (state == KyokuViewModel.States.WAITING_FOR_EAST) {
-                buttonRelEast.setBackgroundResource(R.color.colorAccent);
+                ViewCompat.setBackgroundTintList(buttonRelEast, ColorStateList.valueOf(getResources().getColor(R.color.colorAccent)));
             } else {
-                buttonRelEast.setBackgroundResource(R.color.colorPrimaryDark);
+                ViewCompat.setBackgroundTintList(buttonRelEast, ColorStateList.valueOf(getResources().getColor(R.color.colorPrimaryDark)));
             }
 
             if (state == KyokuViewModel.States.WAITING_FOR_SOUTH) {
-                buttonRelSouth.setBackgroundResource(R.color.colorAccent);
+                ViewCompat.setBackgroundTintList(buttonRelSouth, ColorStateList.valueOf(getResources().getColor(R.color.colorAccent)));
             } else {
-                buttonRelSouth.setBackgroundResource(R.color.colorPrimaryDark);
+                ViewCompat.setBackgroundTintList(buttonRelSouth, ColorStateList.valueOf(getResources().getColor(R.color.colorPrimaryDark)));
             }
 
             if (state == KyokuViewModel.States.WAITING_FOR_WEST) {
-                buttonRelWest.setBackgroundResource(R.color.colorAccent);
+                ViewCompat.setBackgroundTintList(buttonRelWest, ColorStateList.valueOf(getResources().getColor(R.color.colorAccent)));
             } else {
-                buttonRelWest.setBackgroundResource(R.color.colorPrimaryDark);
+                ViewCompat.setBackgroundTintList(buttonRelWest, ColorStateList.valueOf(getResources().getColor(R.color.colorPrimaryDark)));
             }
 
             if (state == KyokuViewModel.States.WAITING_FOR_NORTH) {
-                buttonRelNorth.setBackgroundResource(R.color.colorAccent);
+                ViewCompat.setBackgroundTintList(buttonRelNorth, ColorStateList.valueOf(getResources().getColor(R.color.colorAccent)));
             } else {
-                buttonRelNorth.setBackgroundResource(R.color.colorPrimaryDark);
+                ViewCompat.setBackgroundTintList(buttonRelNorth, ColorStateList.valueOf(getResources().getColor(R.color.colorPrimaryDark)));
             }
         });
 
