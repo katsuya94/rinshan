@@ -1,5 +1,7 @@
 <resources>
-    <string name="app_name">Rinshan</string>
+    <string name="app_name">嶺上</string>
     <string name="start">対局</string>
     <string name="resume">再開</string>
+    <string name="base_time">捨て牌秒数</string>
+    <string name="extra_time">予備秒数</string>
 </resources>

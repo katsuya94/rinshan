@@ -2,11 +2,11 @@ package io.atateno.rinshan;
 
 import android.app.AlertDialog;
 import android.content.Context;
+import android.content.Intent;
 import android.content.pm.ActivityInfo;
 import android.media.MediaPlayer;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
-import android.util.Log;
 import android.view.View;
 import android.arch.lifecycle.ViewModelProviders;
 import android.view.WindowManager;
@@ -15,6 +15,9 @@ import android.widget.ImageButton;
 import android.widget.TextView;
 
 public class MainActivity extends AppCompatActivity {
+    public static final String BASE_TIME_MESSAGE = "io.atateno.rinshan.MainActivity.BASE_TIME_MESSAGE";
+    public static final String EXTRA_TIME_MESSAGE = "io.atateno.rinshan.MainActivity.EXTRA_TIME_MESSAGE";
+
     class FailedToCommitPreferences extends RuntimeException {}
 
     private KyokuViewModel kyokuViewModel;
@@ -75,12 +78,14 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
+        Intent intent = getIntent();
+
         MediaPlayer mp = MediaPlayer.create(this, R.raw.tick);
 
         kyokuViewModel = ViewModelProviders.of(this).get(KyokuViewModel.class);
         kyokuViewModel.init();
-        kyokuViewModel.setBaseTime(5);
-        kyokuViewModel.setExtraTime(15);
+        kyokuViewModel.setBaseTime(intent.getIntExtra(BASE_TIME_MESSAGE, 15));
+        kyokuViewModel.setExtraTime(intent.getIntExtra(EXTRA_TIME_MESSAGE, 45));
         kyokuViewModel.setOnTick(() -> {
             mp.seekTo(0);
             mp.start();
